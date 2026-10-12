@@ -1,0 +1,17 @@
+# Dependencias de Node.js
+node_modules/
+
+# Carpetas de compilación de Vite/React
+dist/
+dist-ssr/
+
+# Variables de entorno locales
+.env
+.env.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# Archivos del sistema
+.DS_Store

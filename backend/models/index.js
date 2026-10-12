@@ -1,0 +1,22 @@
+import { sequelize } from '../config/database.js';
+import defineUser from './User.js';
+import defineHotel from './Hotel.js';
+import defineRoom from './Room.js';
+import defineBooking from './Booking.js';
+
+const User = defineUser(sequelize);
+const Hotel = defineHotel(sequelize);
+const Room = defineRoom(sequelize);
+const Booking = defineBooking(sequelize);
+
+// Relaciones 1:N
+Hotel.hasMany(Room, { foreignKey: { name: 'hotelId', allowNull: false }, onDelete: 'CASCADE' });
+Room.belongsTo(Hotel, { foreignKey: { name: 'hotelId', allowNull: false } });
+
+User.hasMany(Booking, { foreignKey: { name: 'userId', allowNull: false } });
+Booking.belongsTo(User, { foreignKey: { name: 'userId', allowNull: false } });
+
+Room.hasMany(Booking, { foreignKey: { name: 'roomId', allowNull: false } });
+Booking.belongsTo(Room, { foreignKey: { name: 'roomId', allowNull: false } });
+
+export { sequelize, User, Hotel, Room, Booking };
