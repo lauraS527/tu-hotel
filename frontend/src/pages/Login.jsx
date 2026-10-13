@@ -1,33 +1,59 @@
-import React, { useState, useContext } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import API from '../api/axiosInstance';
-import { AuthContext } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import { errorMessage } from '../utils/format';
+import AuthLayout from '../components/AuthLayout';
 
 export default function Login() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const { loginUser } = useContext(AuthContext);
+  const [form, setForm] = useState({ email: '', password: '' });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const { loginUser } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const set = (field) => (e) => setForm({ ...form, [field]: e.target.value });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
+    setError('');
     try {
-      const res = await API.post('/auth/login', { email, password });
+      const res = await API.post('/auth/login', form);
       loginUser(res.data.user, res.data.token);
-      navigate('/');
+      toast.success('¡Bienvenido de nuevo!');
+      const fallback = res.data.user.role === 'admin' ? '/admin' : '/';
+      navigate(location.state?.from || fallback, { replace: true });
     } catch (err) {
-      alert(err.response?.data?.message || 'Error al iniciar sesión');
+      setError(errorMessage(err, 'No se pudo iniciar sesión.'));
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '400px', margin: '2rem auto', border: '1px solid #cbd5e1', borderRadius: '8px' }}>
-      <h2>Iniciar Sesión</h2>
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        <input type="email" placeholder="Correo electrónico" value={email} onChange={(e) => setEmail(e.target.value)} required style={{ padding: '0.6rem' }} />
-        <input type="password" placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)} required style={{ padding: '0.6rem' }} />
-        <button type="submit" style={{ padding: '0.7rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Ingresar</button>
+    <AuthLayout
+      title="Iniciar sesión"
+      subtitle="Accede para reservar y gestionar tus estadías."
+      footer={<>¿Aún no tienes cuenta? <Link to="/register">Regístrate</Link></>}
+    >
+      <form onSubmit={handleSubmit} className="form">
+        <label className="field">
+          <span>Correo electrónico</span>
+          <input type="email" value={form.email} onChange={set('email')} required autoComplete="email" />
+        </label>
+        <label className="field">
+          <span>Contraseña</span>
+          <input type="password" value={form.password} onChange={set('password')} required autoComplete="current-password" />
+        </label>
+        {error && <p className="form-error" role="alert">{error}</p>}
+        <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={loading}>
+          {loading ? 'Ingresando…' : 'Ingresar'}
+        </button>
       </form>
-    </div>
+    </AuthLayout>
   );
 }

@@ -1,43 +1,66 @@
+import './config/env.js'; // debe ser el PRIMER import: carga y valida el .env
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import { sequelize } from './models/index.js';
 
-// 1. Importación de las rutas del sistema
 import authRoutes from './routes/authRoutes.js';
 import hotelRoutes from './routes/hotelRoutes.js';
+import roomRoutes from './routes/roomRoutes.js';
 import bookingRoutes from './routes/bookingRoutes.js';
 
-// 2. Importación del controlador centralizado de errores y la clase personalizada
 import { AppError } from './utils/AppError.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 
-dotenv.config();
-
 const app = express();
 
-// Middlewares globales de Express
-app.use(cors());
-app.use(express.json());
+// Detrás de un proxy (Render, Railway...) para que el límite de intentos vea la IP real
+if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1);
 
-// 3. Registro de las rutas de la API RESTful
-app.use('/api/auth', authRoutes);
+app.use(helmet());
+app.use(
+  cors({
+    origin: (process.env.CORS_ORIGIN || 'http://localhost:5173').split(',').map((o) => o.trim()),
+  })
+);
+app.use(express.json({ limit: '10kb' }));
+
+// Máximo 20 intentos de login/registro cada 15 minutos por IP
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { status: 'fail', statusCode: 429, message: 'Demasiados intentos. Intenta de nuevo más tarde.' },
+});
+
+app.get('/api/health', (req, res) => res.status(200).json({ status: 'ok' }));
+
+app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/hotels', hotelRoutes);
+app.use('/api/rooms', roomRoutes);
 app.use('/api/bookings', bookingRoutes);
 
-// 4. Middleware comodín para capturar cualquier endpoint no registrado (404 Not Found)
-// ⚠️ Se utiliza app.use sin parámetro de ruta para compatibilidad completa con Express 5
+// 404 para rutas no registradas (compatible con Express 5)
 app.use((req, res, next) => {
   next(new AppError(`No se encontró la ruta ${req.originalUrl} en este servidor`, 404));
 });
 
-// 5. REGISTRO DEL MIDDLEWARE CENTRALIZADO DE ERRORES (Debe ir siempre al final)
-app.use(errorHandler);
+app.use(errorHandler); // siempre al final
 
 const PORT = process.env.PORT || 5000;
 
-// Sincronización con la base de datos e inicio del servidor
-sequelize.sync().then(() => {
-  console.log('Base de datos conectada y sincronizada correctamente.');
-  app.listen(PORT, () => console.log(`Servidor ejecutándose en http://localhost:${PORT}`));
-});
+const start = async () => {
+  try {
+    await sequelize.authenticate();
+    await sequelize.sync(); // para producción real, usa migraciones
+    console.log('Base de datos conectada y sincronizada correctamente.');
+    app.listen(PORT, () => console.log(`Servidor ejecutándose en http://localhost:${PORT}`));
+  } catch (error) {
+    console.error('No se pudo iniciar el servidor:', error.message);
+    process.exit(1);
+  }
+};
+
+start();

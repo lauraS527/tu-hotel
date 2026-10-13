@@ -1,28 +1,28 @@
 import jwt from 'jsonwebtoken';
+import { AppError } from '../utils/AppError.js';
 
-// Middleware para verificar la validez del token JWT
+// Verifica el token JWT del header "Authorization: Bearer <token>"
 export const verifyToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[3]; // "Bearer TOKEN"
+  const [scheme, token] = (req.headers.authorization || '').split(' ');
 
-  if (!token) {
-    return res.status(401).json({ message: 'Token de acceso no proporcionado.' });
+  if (scheme !== 'Bearer' || !token) {
+    return next(new AppError('Token de acceso no proporcionado.', 401));
   }
 
-  jwt.verify(token, process.env.JWT_SECRET || 'secret_key', (err, decoded) => {
-    if (err) {
-      return res.status(401).json({ message: 'Token no válido o expirado.' });
-    }
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.userId = decoded.id;
     req.userRole = decoded.role;
     next();
-  });
+  } catch {
+    next(new AppError('Token no válido o expirado.', 401));
+  }
 };
 
-// Middleware para restringir acceso exclusivo a Administradores
+// Restringe el acceso a administradores
 export const isAdmin = (req, res, next) => {
   if (req.userRole !== 'admin') {
-    return res.status(403).json({ message: 'Acceso denegado: Requiere rol de administrador.' });
+    return next(new AppError('Acceso denegado: requiere rol de administrador.', 403));
   }
   next();
 };

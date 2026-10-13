@@ -1,15 +1,29 @@
 export const errorHandler = (err, req, res, next) => {
-  err.statusCode = err.statusCode || 500;
-  err.status = err.status || 'error';
+  let statusCode = err.statusCode || err.status || 500;
+  let message = err.message;
+  let operational = err.isOperational || statusCode < 500;
 
-  if (process.env.NODE_ENV === 'development') {
-    console.error('💥 Error detectado:', err);
+  // Errores conocidos de Sequelize
+  if (err.name === 'SequelizeUniqueConstraintError') {
+    statusCode = 409;
+    message = 'El registro ya existe.';
+    operational = true;
+  } else if (err.name === 'SequelizeValidationError') {
+    statusCode = 400;
+    message = err.errors.map((e) => e.message).join('; ');
+    operational = true;
+  } else if (err.name === 'SequelizeForeignKeyConstraintError') {
+    statusCode = 409;
+    message = 'No se puede completar la operación: hay registros asociados (por ejemplo, reservas).';
+    operational = true;
   }
 
-  res.status(err.statusCode).json({
-    status: err.status,
-    statusCode: err.statusCode,
-    message: err.message || 'Error interno del servidor',
-    ...(err.errors && { errors: err.errors })
+  // Los errores inesperados se registran SIEMPRE
+  if (!operational) console.error('💥 Error inesperado:', err);
+
+  res.status(statusCode).json({
+    status: statusCode < 500 ? 'fail' : 'error',
+    statusCode,
+    message: operational || process.env.NODE_ENV !== 'production' ? message : 'Error interno del servidor',
   });
 };

@@ -15,7 +15,8 @@ export const sequelize = new Sequelize(
     dialectOptions: process.env.DB_SSL === 'true' ? {
       ssl: {
         require: true,
-        rejectUnauthorized: false,
+        // Por defecto se verifica el certificado. Solo ponlo en 'false' si tu proveedor lo exige.
+        rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
       },
     } : {},
   }

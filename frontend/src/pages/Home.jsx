@@ -1,75 +1,110 @@
-import React, { useState, useEffect } from 'react';
-import API from '../api/axiosInstance';
-import SearchFilter from '../components/SearchFilter';
+import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import { useApi } from '../hooks/useApi';
+import { nightsBetween } from '../utils/format';
+import SearchBar from '../components/SearchBar';
+import HotelCard from '../components/HotelCard';
 import BookingModal from '../components/BookingModal';
+import Icon from '../components/Icon';
+
+const EMPTY = { search: '', checkIn: '', checkOut: '', guests: '', stars: '' };
 
 export default function Home() {
-  const [hotels, setHotels] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [classificationFilter, setClassificationFilter] = useState('All');
-  const [selectedRoom, setSelectedRoom] = useState(null);
-  const [selectedHotel, setSelectedHotel] = useState(null);
+  const { user } = useAuth();
+  const toast = useToast();
+  const navigate = useNavigate();
 
-  useEffect(() => {
-    API.get('/hotels').then((res) => setHotels(res.data));
-  }, []);
+  const [applied, setApplied] = useState(EMPTY); // criterios de la última búsqueda
+  const [booking, setBooking] = useState(null); // { room, hotel }
 
-  // Lógica de encadenamiento para filtrar hoteles simultáneamente por texto y clasificación
-  const filteredHotels = hotels
-    .filter((h) => classificationFilter === 'All' || h.classification.toString() === classificationFilter)
-    .filter((h) => h.name.toLowerCase().includes(searchTerm.toLowerCase()) || h.address.toLowerCase().includes(searchTerm.toLowerCase()));
+  const params = useMemo(
+    () => Object.fromEntries(Object.entries(applied).filter(([, value]) => value)),
+    [applied]
+  );
+  const { data: hotels, loading, error, reload } = useApi('/hotels', params);
 
-  const handleBookingConfirm = async (bookingData) => {
-    try {
-      await API.post('/bookings', bookingData);
-      alert('¡Reserva realizada con éxito!');
-      setSelectedRoom(null);
-    } catch (err) {
-      alert(err.response?.data?.message || 'Error al procesar la reserva.');
+  const nights = nightsBetween(applied.checkIn, applied.checkOut);
+  const hasFilters = Object.keys(params).length > 0;
+
+  const handleReserve = (room, hotel) => {
+    if (!user) {
+      toast.info('Inicia sesión para completar tu reserva.');
+      navigate('/login', { state: { from: '/' } });
+      return;
     }
+    setBooking({ room, hotel });
   };
 
   return (
-    <div style={{ padding: '2rem' }}>
-      <h2>Catálogo de Hoteles</h2>
-      <SearchFilter
-        searchTerm={searchTerm}
-        setSearchTerm={setSearchTerm}
-        classificationFilter={classificationFilter}
-        setClassificationFilter={setClassificationFilter}
-      />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
-        {filteredHotels.map((hotel) => (
-          <div key={hotel.id} style={{ border: '1px solid #ccc', padding: '1rem', borderRadius: '8px' }}>
-            <h3>{hotel.name}</h3>
-            <p>📍 {hotel.address}</p>
-            <p>⭐ Clasificación: {hotel.classification} estrellas</p>
-            <p>💵 Desde ${hotel.pricePerNight} / noche</p>
-            <p>✨ Comodidades: {hotel.amenities}</p>
-            <h4>Habitaciones Disponibles:</h4>
-            {hotel.Rooms?.map((room) => (
-              <div key={room.id} style={{ background: '#f9f9f9', padding: '0.5rem', marginBottom: '0.5rem' }}>
-                <span>{room.roomType} - ${room.pricePerNight}</span>
-                <button
-                  style={{ marginLeft: '1rem' }}
-                  onClick={() => { setSelectedRoom(room); setSelectedHotel(hotel); }}
-                >
-                  Reservar
-                </button>
+    <>
+      <section className="hero">
+        <div className="container hero-inner">
+          <p className="eyebrow">Reserva en minutos</p>
+          <h1>Encuentra el lugar perfecto para tu próxima estadía</h1>
+          <p className="hero-sub">Compara hoteles, elige tu habitación y confirma tu reserva sin complicaciones.</p>
+          <SearchBar initial={EMPTY} onSearch={setApplied} busy={loading} />
+        </div>
+      </section>
+
+      <section className="container results">
+        <div className="results-head">
+          <h2>{hasFilters ? 'Resultados de tu búsqueda' : 'Hoteles destacados'}</h2>
+          {!loading && hotels && (
+            <span className="muted">
+              {hotels.length} {hotels.length === 1 ? 'hotel disponible' : 'hoteles disponibles'}
+              {nights > 0 && ` · ${nights} ${nights === 1 ? 'noche' : 'noches'}`}
+            </span>
+          )}
+        </div>
+
+        {error && (
+          <div className="alert alert-error" role="alert">
+            <Icon name="alert" /> <span>{error}</span>
+            <button type="button" className="link-btn" onClick={reload}>Reintentar</button>
+          </div>
+        )}
+
+        {loading && (
+          <div className="hotel-grid" aria-busy="true">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="hotel-card skeleton">
+                <div className="sk-block sk-img" />
+                <div className="sk-block sk-line" />
+                <div className="sk-block sk-line short" />
+                <div className="sk-block sk-line" />
               </div>
             ))}
           </div>
-        ))}
-      </div>
+        )}
 
-      {selectedRoom && (
+        {!loading && hotels?.length === 0 && !error && (
+          <div className="empty-state">
+            <span className="empty-icon"><Icon name="search" size={28} /></span>
+            <h3>No encontramos hoteles con esos criterios</h3>
+            <p className="muted">Prueba con otras fechas, menos huéspedes o una categoría distinta.</p>
+            <button type="button" className="btn btn-primary" onClick={() => setApplied(EMPTY)}>Ver todos los hoteles</button>
+          </div>
+        )}
+
+        {!loading && hotels?.length > 0 && (
+          <div className="hotel-grid">
+            {hotels.map((hotel, i) => (
+              <HotelCard key={hotel.id} hotel={hotel} index={i} nights={nights} onReserve={handleReserve} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {booking && (
         <BookingModal
-          room={selectedRoom}
-          hotel={selectedHotel}
-          onClose={() => setSelectedRoom(null)}
-          onConfirm={handleBookingConfirm}
+          room={booking.room}
+          hotel={booking.hotel}
+          initialDates={{ checkIn: applied.checkIn, checkOut: applied.checkOut }}
+          onClose={() => setBooking(null)}
         />
       )}
-    </div>
+    </>
   );
 }

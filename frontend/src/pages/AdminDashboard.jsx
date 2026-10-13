@@ -1,36 +1,43 @@
-import React, { useState } from 'react';
-import API from '../api/axiosInstance';
+import { useState } from 'react';
+import HotelsAdmin from '../components/admin/HotelsAdmin';
+import RoomsAdmin from '../components/admin/RoomsAdmin';
+import BookingsAdmin from '../components/admin/BookingsAdmin';
+
+const TABS = [
+  { key: 'hotels', label: 'Hoteles', Component: HotelsAdmin },
+  { key: 'rooms', label: 'Habitaciones', Component: RoomsAdmin },
+  { key: 'bookings', label: 'Reservas', Component: BookingsAdmin },
+];
 
 export default function AdminDashboard() {
-  const [formData, setFormData] = useState({
-    name: '', address: '', classification: 5, pricePerNight: '', amenities: ''
-  });
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      await API.post('/hotels', formData);
-      alert('Hotel agregado exitosamente');
-      setFormData({ name: '', address: '', classification: 5, pricePerNight: '', amenities: '' });
-    } catch (err) {
-      alert('Error al crear el hotel.');
-    }
-  };
+  const [tab, setTab] = useState('hotels');
+  const { Component } = TABS.find((t) => t.key === tab);
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '600px' }}>
-      <h2>Panel Admin - Crear Hotel</h2>
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-        <input type="text" placeholder="Nombre del hotel" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required style={{ padding: '0.5rem' }} />
-        <input type="text" placeholder="Dirección" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} required style={{ padding: '0.5rem' }} />
-        <label>Clasificación (Estrellas):</label>
-        <select value={formData.classification} onChange={(e) => setFormData({ ...formData, classification: Number(e.target.value) })} style={{ padding: '0.5rem' }}>
-          {[5, 4, 3, 2, 1].map(n => <option key={n} value={n}>{n} Estrellas</option>)}
-        </select>
-        <input type="number" placeholder="Precio base por noche" value={formData.pricePerNight} onChange={(e) => setFormData({ ...formData, pricePerNight: e.target.value })} required style={{ padding: '0.5rem' }} />
-        <input type="text" placeholder="Comodidades (WiFi, Piscina, etc.)" value={formData.amenities} onChange={(e) => setFormData({ ...formData, amenities: e.target.value })} style={{ padding: '0.5rem' }} />
-        <button type="submit" style={{ padding: '0.7rem', background: '#d97706', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Guardar Hotel</button>
-      </form>
+    <div className="container page">
+      <div className="page-head">
+        <div>
+          <h1>Panel de administración</h1>
+          <p className="muted">Gestiona hoteles, habitaciones y reservas.</p>
+        </div>
+      </div>
+
+      <div className="tabs" role="tablist">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.key}
+            className={`tab ${tab === t.key ? 'active' : ''}`}
+            onClick={() => setTab(t.key)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <Component />
     </div>
   );
 }
